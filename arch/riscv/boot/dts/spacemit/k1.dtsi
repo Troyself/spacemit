@@ -643,6 +643,19 @@
 			#reset-cells = <1>;
 		};
 
+		i2c2: i2c@d4012000 {
+			compatible = "spacemit,k1-i2c";
+			reg = <0x0 0xd4012000 0x0 0x38>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			interrupt-parent = <&plic>;
+			interrupts = <38>;
+			clocks = <&syscon_apbc CLK_TWSI0>, <&syscon_apbc CLK_TWSI0_BUS>;
+			clock-names = "func", "bus";
+			clock-frequency = <400000>;
+			status = "disabled";
+		};
+
 		camera-bus {
 			compatible = "simple-bus";
 			ranges;
@@ -659,6 +672,31 @@
 			#size-cells = <2>;
 			dma-ranges = <0x0 0x00000000 0x0 0x00000000 0x0 0x80000000>,
 				     <0x1 0x00000000 0x1 0x80000000 0x3 0x00000000>;
+
+			i2s0: i2s0@d4026000 {
+				compatible = "spacemit,k1-i2s";
+				#sound-dai-cells = <0>;
+				reg = <0x0 0xD4026000 0x0 0x30>;
+				clocks = <&syscon_mpmu CLK_I2S_153P6_BASE>,
+					 <&syscon_mpmu CLK_I2S_SYSCLK_SRC>,
+					 <&syscon_mpmu CLK_I2S_SYSCLK>,
+					 <&syscon_mpmu CLK_I2S_BCLK>,
+					 <&syscon_apbc CLK_SSPA0_BUS>,
+					 <&syscon_apbc CLK_SSPA0>;
+				clock-names = "153p6_base", "sysclk_src", "sysclk", "bclk",
+						"sspa_bus", "sspa";
+				resets = <&syscon_apbc RESET_SSPA0>;
+				assigned-clocks = <&syscon_mpmu CLK_I2S_153P6_BASE>,
+							<&syscon_mpmu CLK_I2S_SYSCLK_SRC>;
+				assigned-clock-rates = <307200000>, <307200000>;
+				dmas = <&pdma0 22 1>, <&pdma0 21 1>;
+				dma-names = "rx", "tx";
+				status = "okay";
+			};
+
+			sound_card: sound-card {
+				compatible = "simple-audio-card";
+			};
 
 			uart0: serial@d4017000 {
 				compatible = "spacemit,k1-uart",
@@ -842,6 +880,29 @@
 				clock-names = "core", "io";
 				interrupts = <101>;
 				status = "disabled";
+			};
+		};
+		
+		emac0: ethernet@cac80000 {
+			compatible = "spacemit,k1-emac";
+			reg = <0x0 0xcac80000 0x0 0x00000420>;
+			clocks = <&syscon_apmu CLK_EMAC0_BUS>;
+			interrupts = <131>;
+			mac-address = [ 00 00 00 00 00 00 ];
+			phy-handle = <&rgmii0>;
+			phy-mode = "rgmii-id";
+			resets = <&syscon_apmu RESET_EMAC0>;
+			rx-internal-delay-ps = <0>;
+			tx-internal-delay-ps = <0>;
+			spacemit,apmu = <&syscon_apmu 0x3e4>;
+
+			mdio-bus {
+			#address-cells = <0x1>;
+			#size-cells = <0x0>;
+
+				rgmii0: phy@1 {
+					reg = <0x1>;
+				};
 			};
 		};
 	};

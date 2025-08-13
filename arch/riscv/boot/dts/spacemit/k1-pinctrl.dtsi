@@ -28,4 +28,46 @@
 			drive-strength = <32>;
 		};
 	};
+	
+	gmac0_1_cfg: gmac0-1-cfg {
+		gmac0-1-pins {
+			pinmux = <K1_PADCONF(0, 1)>,
+				 <K1_PADCONF(1, 1)>,
+				 <K1_PADCONF(2, 1)>,
+				 <K1_PADCONF(3, 1)>,
+				 <K1_PADCONF(4, 1)>,
+				 <K1_PADCONF(5, 1)>,
+				 <K1_PADCONF(6, 1)>,
+				 <K1_PADCONF(7, 1)>,
+				 <K1_PADCONF(8, 1)>,
+				 <K1_PADCONF(9, 1)>,
+				 <K1_PADCONF(10, 1)>,
+				 <K1_PADCONF(11, 1)>,
+				 <K1_PADCONF(12, 1)>,
+				 <K1_PADCONF(13, 1)>,
+				 <K1_PADCONF(14, 1)>,
+				 <K1_PADCONF(45, 1)>;
+			bias-pull-up = <0>;
+			drive-strength = <32>;
+		};
+	};
+
+	sspa0_3_cfg: sspa0-3-cfg {
+		sspa0-3-pins {
+			pinmux = <K1_PADCONF(118, 3)>,
+				 <K1_PADCONF(119, 3)>,
+				 <K1_PADCONF(120, 3)>,
+				 <K1_PADCONF(121, 3)>,
+				 <K1_PADCONF(122, 3)>;
+			bias-pull-up = <1>;
+		};
+	};
+
+	i2c2_4_cfg: i2c2-4-cfg {
+		i2c-2-4-pins {
+			pinmux = <K1_PADCONF(84, 4)>,
+				 <K1_PADCONF(85, 4)>;
+			bias-pull-up = <1>;
+		};
+	};
 };
