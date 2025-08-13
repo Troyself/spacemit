@@ -36,18 +36,35 @@
 #define SSCR_DW_18BYTE				(0x11 << 5)
 #define SSCR_DW_32BYTE				(0x1f << 5)
 
+#define SSCR_SSE				BIT(0)		/* SPI/I2S Enable */
+#define SSCR_FRF				GENMASK(2, 1)	/* Frame Format*/
+#define SSCR_TRAIL				BIT(13)
+
+#define SSFCR_TFT				GENMASK(3, 0)   /* TXFIFO Trigger Threshold */
+#define SSFCR_RFT				GENMASK(8, 5)   /* RXFIFO Trigger Threshold */
+#define SSFCR_TSRE				BIT(10)		/* Transmit Service Request Enable */
+#define SSFCR_RSRE				BIT(11)		/* Receive Service Request Enable */
+
+#define SSPSP_FSRT				BIT(3)		/* Frame Sync Relative Timing Bit */
+#define SSPSP_SFRMP				BIT(4)		/* Serial Frame Polarity */
+#define SSPSP_SFRMWDTH(x)			((x) << 12)	/* Serial Frame Width field  */
+
 #define SPACEMIT_PCM_RATES			SNDRV_PCM_RATE_8000_192000
 #define SPACEMIT_PCM_FORMATS			(SNDRV_PCM_FMTBIT_S8 | \
 						 SNDRV_PCM_FMTBIT_S16_LE | \
 						 SNDRV_PCM_FMTBIT_S24_LE | \
 						 SNDRV_PCM_FMTBIT_S32_LE)
 
+#define SPACEMIT_I2S_PERIOD_SIZE		1024
+#define SPACEMIT_I2S_PERIOD_COUNT		4
+
 struct spacemit_i2s_dev {
 	struct device *dev;
 
 	void __iomem *base;
-	struct resource *res;
+	
 	struct reset_control *reset;
+
 	struct clk *sysclk;
 	struct clk *bclk;
 	struct clk *sspa_clk;
@@ -64,18 +81,6 @@ struct spacemit_i2s_dev {
 	int started_count;
 };
 
-static int spacemit_i2s_runtime_suspend(struct device *dev)
-{
-	return 0;
-}
-
-static int spacemit_i2s_runtime_resume(struct device *dev)
-{
-	return 0;
-}
-
-#define I2S_PERIOD_SIZE          1024
-#define I2S_PERIOD_COUNT         4
 static const struct snd_pcm_hardware spacemit_pcm_hardware = {
 	.info		  = SNDRV_PCM_INFO_INTERLEAVED |
 			    SNDRV_PCM_INFO_BATCH,
@@ -85,11 +90,11 @@ static const struct snd_pcm_hardware spacemit_pcm_hardware = {
 	.rate_max         = SNDRV_PCM_RATE_48000,
 	.channels_min     = 1,
 	.channels_max     = 2,
-	.buffer_bytes_max = I2S_PERIOD_SIZE * I2S_PERIOD_COUNT * 4,
-	.period_bytes_min = I2S_PERIOD_SIZE * 4,
-	.period_bytes_max = I2S_PERIOD_SIZE * 4,
-	.periods_min	  = I2S_PERIOD_COUNT,
-	.periods_max	  = I2S_PERIOD_COUNT,
+	.buffer_bytes_max = SPACEMIT_I2S_PERIOD_SIZE * SPACEMIT_I2S_PERIOD_COUNT * 4,
+	.period_bytes_min = SPACEMIT_I2S_PERIOD_SIZE * 4,
+	.period_bytes_max = SPACEMIT_I2S_PERIOD_SIZE * 4,
+	.periods_min	  = SPACEMIT_I2S_PERIOD_COUNT,
+	.periods_max	  = SPACEMIT_I2S_PERIOD_COUNT,
 };
 
 static const struct snd_dmaengine_pcm_config spacemit_dmaengine_pcm_config = {
@@ -99,24 +104,11 @@ static const struct snd_dmaengine_pcm_config spacemit_dmaengine_pcm_config = {
 	.prealloc_buffer_size = 16 * 1024,
 };
 
-#define SSCR_SSE			BIT(0)		/* SPI/I2S Enable */
-#define SSCR_FRF			GENMASK(2, 1)	/* Frame Format*/
-#define SSCR_TRAIL			BIT(13)
-
-#define SSFCR_TFT			GENMASK(3, 0)   /* TXFIFO Trigger Threshold */
-#define SSFCR_RFT			GENMASK(8, 5)   /* RXFIFO Trigger Threshold */
-#define SSFCR_TSRE			BIT(10)		/* Transmit Service Request Enable */
-#define SSFCR_RSRE			BIT(11)		/* Receive Service Request Enable */
-
-#define SSPSP_FSRT			BIT(3)		/* Frame Sync Relative Timing Bit */
-#define SSPSP_SFRMP			BIT(4)		/* Serial Frame Polarity */
-#define SSPSP_SFRMWDTH(x)		((x) << 12)	/* Serial Frame Width field  */
-
 static int spacemit_i2s_startup(struct snd_pcm_substream *substream,
 			    struct snd_soc_dai *dai)
 {
 	struct spacemit_i2s_dev *i2s = snd_soc_dai_get_drvdata(dai);
-	u32 sscr_val, sspsp_val, ssinten_val, ssto_val, ssfcr_val;
+	u32 sscr_val, sspsp_val, ssfcr_val;
 	u32 val;
 
 	sscr_val = SSCR_TRAIL | SSCR_DW_32BYTE | (0x3 << 1);
@@ -130,15 +122,12 @@ static int spacemit_i2s_startup(struct snd_pcm_substream *substream,
 
 	switch (i2s->dai_fmt & SND_SOC_DAIFMT_FORMAT_MASK) {
 	case SND_SOC_DAIFMT_I2S:
-		/*sspsp_val |= SSPSP_FSRT | SSPSP_SFRMWDTH(0x10);*/
 		sspsp_val |= (0x10 << 12)| (0x1 << 3);
 		break;
 	case SND_SOC_DAIFMT_DSP_B:
-		/*sspsp_val |= SSPSP_SFRMWDTH(0x1);*/
 		sspsp_val |= (0x1 << 12);
 		break;
 	case SND_SOC_DAIFMT_DSP_A:
-		/*sspsp_val |= SSPSP_FSRT | SSPSP_SFRMWDTH(0x1);*/
 		sspsp_val |= (0x1 << 12)| (0x1 << 3);
 		break;
 	default:
@@ -163,18 +152,16 @@ static int spacemit_i2s_hw_params(struct snd_pcm_substream *substream,
 				  struct snd_soc_dai *dai)
 {
 	struct spacemit_i2s_dev *i2s = snd_soc_dai_get_drvdata(dai);
-	u32 data_width = 0, data_bits = 0, channels, fs;
+	u32 data_width = 0, data_bits = 0;
 	struct snd_dmaengine_dai_dma_data *dma_data;
 	u32 val;
 	unsigned long bclk_rate;
 	int ret;
 
-	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
-		dma_data = &i2s->playback_dma_data;
-	else
-		dma_data = &i2s->capture_dma_data;
+	dma_data = &i2s->playback_dma_data;
 
-	dma_data->addr = i2s->res->start + SSDATR;
+	if (substream->stream == SNDRV_PCM_STREAM_CAPTURE)
+		dma_data = &i2s->capture_dma_data;
 
 	switch (params_format(params)) {
 	case SNDRV_PCM_FORMAT_S8:
@@ -201,7 +188,7 @@ static int spacemit_i2s_hw_params(struct snd_pcm_substream *substream,
 		dma_data->addr_width = DMA_SLAVE_BUSWIDTH_4_BYTES;
 		break;
 	default:
-		pr_debug("%s, unexpected data width type\n", __func__);
+		dev_dbg(i2s->dev, "unexpected data width type");
 		return -EINVAL;
 	}
 
@@ -209,8 +196,6 @@ static int spacemit_i2s_hw_params(struct snd_pcm_substream *substream,
 	val &= ~SSCR_DW_32BYTE;
 	val |= data_width;
 	writel(val, i2s->base + SSCR);
-
-	snd_soc_dai_set_dma_data(dai, substream, dma_data);
 
 	bclk_rate = params_channels(params) *
 		    params_rate(params) *
@@ -239,9 +224,8 @@ static int spacemit_i2s_set_fmt(struct snd_soc_dai *cpu_dai,
 {
 	struct spacemit_i2s_dev *i2s = dev_get_drvdata(cpu_dai->dev);
 
-	dev_err(i2s->dev, "enter set_fmt");
-	
 	i2s->dai_fmt = fmt;
+
 	switch(fmt & SND_SOC_DAIFMT_FORMAT_MASK) {
 	case SND_SOC_DAIFMT_I2S:
 		cpu_dai->driver->playback.formats = SNDRV_PCM_FMTBIT_S16_LE;
@@ -269,8 +253,6 @@ static int spacemit_i2s_trigger(struct snd_pcm_substream *substream,
 {
 	struct spacemit_i2s_dev *i2s = snd_soc_dai_get_drvdata(dai);
 	u32 val;
-
-	dev_err(i2s->dev, "enter trigger");
 
 	switch (cmd) {
 	case SNDRV_PCM_TRIGGER_START:
@@ -306,6 +288,10 @@ static int spacemit_i2s_dai_probe(struct snd_soc_dai *dai)
 {
 	struct spacemit_i2s_dev *i2s = snd_soc_dai_get_drvdata(dai);
 
+	snd_soc_dai_init_dma_data(dai,
+				  i2s->has_playback ? &i2s->playback_dma_data : NULL,
+				  i2s->has_capture? &i2s->capture_dma_data: NULL);
+
 	reset_control_deassert(i2s->reset);
 
 	return 0;
@@ -338,7 +324,8 @@ static struct snd_soc_dai_driver spacemit_i2s_dai = {
 };
 
 static int spacemit_i2s_init_dai(struct spacemit_i2s_dev *i2s,
-				 struct snd_soc_dai_driver **dp)
+				 struct snd_soc_dai_driver **dp,
+				 dma_addr_t addr)
 {
 	struct device_node *node = i2s->dev->of_node;
 	struct snd_soc_dai_driver *dai;
@@ -364,9 +351,9 @@ static int spacemit_i2s_init_dai(struct spacemit_i2s_dev *i2s,
 		dai->playback.rates = SPACEMIT_PCM_RATES;
 		dai->playback.formats = SPACEMIT_PCM_FORMATS;
 
-		i2s->playback_dma_data.addr = i2s->res->start + SSDATR;
 		i2s->playback_dma_data.addr_width = DMA_SLAVE_BUSWIDTH_2_BYTES;
 		i2s->playback_dma_data.maxburst = 32;
+		i2s->playback_dma_data.addr = addr;
 	}
 
 	if (i2s->has_capture) {
@@ -376,9 +363,9 @@ static int spacemit_i2s_init_dai(struct spacemit_i2s_dev *i2s,
 		dai->capture.rates = SPACEMIT_PCM_RATES;
 		dai->capture.formats = SPACEMIT_PCM_FORMATS;
 
-		i2s->capture_dma_data.addr = i2s->res->start + SSDATR;
 		i2s->capture_dma_data.addr_width = DMA_SLAVE_BUSWIDTH_2_BYTES;
 		i2s->capture_dma_data.maxburst = 32;
+		i2s->capture_dma_data.addr = addr;
 	}
 
 	if (dp)
@@ -396,8 +383,9 @@ static int spacemit_i2s_probe(struct platform_device *pdev)
 {
 	struct snd_soc_dai_driver *dai;
 	struct spacemit_i2s_dev *i2s;
-	int ret;
+	struct resource *res;
 	struct clk *clk;
+	int ret;
 
 	i2s = devm_kzalloc(&pdev->dev, sizeof(*i2s), GFP_KERNEL);
 	if (!i2s)
@@ -405,7 +393,6 @@ static int spacemit_i2s_probe(struct platform_device *pdev)
 
 	i2s->dev = &pdev->dev;
 	
-	dev_err(i2s->dev, "ready to get sysclk");
 	i2s->sysclk = devm_clk_get_enabled(i2s->dev, "sysclk");
 	if(IS_ERR(i2s->sysclk))
 		return dev_err_probe(i2s->dev, PTR_ERR(i2s->sysclk), "failed to enable sysbase clock\n");
@@ -422,7 +409,7 @@ static int spacemit_i2s_probe(struct platform_device *pdev)
 	if (IS_ERR(clk))
 		return dev_err_probe(i2s->dev, PTR_ERR(clk), "failed to enable sspa clock\n");
 
-	i2s->base = devm_platform_get_and_ioremap_resource(pdev, 0, &i2s->res);
+	i2s->base = devm_platform_get_and_ioremap_resource(pdev, 0, &res);
 	if (IS_ERR(i2s->base))
 		return dev_err_probe(i2s->dev, PTR_ERR(i2s->base), "failed to map registers\n");
 
@@ -433,7 +420,7 @@ static int spacemit_i2s_probe(struct platform_device *pdev)
 
 	dev_set_drvdata(i2s->dev, i2s);
 
-	spacemit_i2s_init_dai(i2s, &dai);
+	spacemit_i2s_init_dai(i2s, &dai, res->start + SSDATR);
 
 	ret = devm_snd_soc_register_component(i2s->dev,
 					      &spacemit_i2s_component,
