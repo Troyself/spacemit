@@ -1,3 +1,4 @@
+#include "asm/mmio.h"
 #include <linux/clk.h>
 #include <linux/delay.h>
 #include <linux/mfd/syscon.h>
@@ -104,36 +105,15 @@ static const struct snd_dmaengine_pcm_config spacemit_dmaengine_pcm_config = {
 	.prealloc_buffer_size = 16 * 1024,
 };
 
-static int spacemit_i2s_startup(struct snd_pcm_substream *substream,
-			    struct snd_soc_dai *dai)
+static void spacemit_i2s_init(struct spacemit_i2s_dev *i2s)
 {
-	struct spacemit_i2s_dev *i2s = snd_soc_dai_get_drvdata(dai);
+
 	u32 sscr_val, sspsp_val, ssfcr_val;
 	u32 val;
 
 	sscr_val = SSCR_TRAIL | SSCR_DW_32BYTE | (0x3 << 1);
 	ssfcr_val = (0xf << 0) | (0xf << 5)| SSFCR_RSRE | SSFCR_TSRE;
 	sspsp_val = SSPSP_SFRMP;
-
-	val = readl(i2s->base + SSCR);
-
-	if (val & SSCR_SSE)
-		return 0;
-
-	switch (i2s->dai_fmt & SND_SOC_DAIFMT_FORMAT_MASK) {
-	case SND_SOC_DAIFMT_I2S:
-		sspsp_val |= (0x10 << 12)| (0x1 << 3);
-		break;
-	case SND_SOC_DAIFMT_DSP_B:
-		sspsp_val |= (0x1 << 12);
-		break;
-	case SND_SOC_DAIFMT_DSP_A:
-		sspsp_val |= (0x1 << 12)| (0x1 << 3);
-		break;
-	default:
-		dev_err(i2s->dev, "unexpected format type");
-		return -EINVAL;
-	}
 
 	writel(sscr_val, i2s->base + SSCR);
 	writel(ssfcr_val, i2s->base + SSFCR);
@@ -143,8 +123,6 @@ static int spacemit_i2s_startup(struct snd_pcm_substream *substream,
 	val = readl(i2s->base + SSRWT);
 	val |= 1;
 	writel(val, i2s->base + SSRWT);
-
-	return 0;
 }
 
 static int spacemit_i2s_hw_params(struct snd_pcm_substream *substream,
@@ -152,11 +130,15 @@ static int spacemit_i2s_hw_params(struct snd_pcm_substream *substream,
 				  struct snd_soc_dai *dai)
 {
 	struct spacemit_i2s_dev *i2s = snd_soc_dai_get_drvdata(dai);
-	u32 data_width = 0, data_bits = 0;
 	struct snd_dmaengine_dai_dma_data *dma_data;
-	u32 val;
+	u32 data_width = 0, data_bits = 0;
 	unsigned long bclk_rate;
+	u32 sscr_val;
 	int ret;
+
+	sscr_val = readl(i2s->base + SSCR);
+	if (sscr_val & SSCR_SSE)
+		return 0;
 
 	dma_data = &i2s->playback_dma_data;
 
@@ -192,10 +174,11 @@ static int spacemit_i2s_hw_params(struct snd_pcm_substream *substream,
 		return -EINVAL;
 	}
 
-	val = readl(i2s->base + SSCR);
-	val &= ~SSCR_DW_32BYTE;
-	val |= data_width;
-	writel(val, i2s->base + SSCR);
+	sscr_val &= ~SSCR_DW_32BYTE;
+	sscr_val |= data_width;
+	writel(sscr_val, i2s->base + SSCR);
+
+	spacemit_i2s_init(i2s);
 
 	bclk_rate = params_channels(params) *
 		    params_rate(params) *
@@ -223,27 +206,37 @@ static int spacemit_i2s_set_fmt(struct snd_soc_dai *cpu_dai,
 				unsigned int fmt)
 {
 	struct spacemit_i2s_dev *i2s = dev_get_drvdata(cpu_dai->dev);
+	u32 sspsp_val;
 
 	i2s->dai_fmt = fmt;
+
+	sspsp_val = readl(i2s->base + SSPSP);
 
 	switch(fmt & SND_SOC_DAIFMT_FORMAT_MASK) {
 	case SND_SOC_DAIFMT_I2S:
 		cpu_dai->driver->playback.formats = SNDRV_PCM_FMTBIT_S16_LE;
 		cpu_dai->driver->capture.formats = SNDRV_PCM_FMTBIT_S16_LE;
+		sspsp_val |= (0x10 << 12)| (0x1 << 3);
 		break;
 	case SND_SOC_DAIFMT_DSP_A:
 	case SND_SOC_DAIFMT_DSP_B:
 		cpu_dai->driver->playback.channels_min = 1;
 		cpu_dai->driver->playback.channels_max = 1;
+		cpu_dai->driver->playback.formats = SNDRV_PCM_FMTBIT_S32_LE;
 		cpu_dai->driver->capture.channels_min = 1;
 		cpu_dai->driver->capture.channels_max = 1;
-		cpu_dai->driver->playback.formats = SNDRV_PCM_FMTBIT_S32_LE;
 		cpu_dai->driver->capture.formats = SNDRV_PCM_FMTBIT_S32_LE;
+		sspsp_val |= (0x1 << 12);
 		break;
 	default:
 		dev_err(i2s->dev, "unexpected format type");
 		return -EINVAL;
 	}
+
+	if ((fmt & SND_SOC_DAIFMT_FORMAT_MASK) == SND_SOC_DAIFMT_DSP_A)
+		sspsp_val |= (0x1 << 3);
+
+	writel(sspsp_val, i2s->base + SSPSP);
 	
 	return 0;
 }
