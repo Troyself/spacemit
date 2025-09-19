@@ -28,4 +28,23 @@
 			drive-strength = <32>;
 		};
 	};
+
+	sspa0_3_cfg: sspa0-3-cfg {
+		sspa0-3-pins {
+			pinmux = <K1_PADCONF(118, 3)>,
+				 <K1_PADCONF(119, 3)>,
+				 <K1_PADCONF(120, 3)>,
+				 <K1_PADCONF(121, 3)>,
+				 <K1_PADCONF(122, 3)>;
+			bias-pull-up = <1>;
+		};
+	};
+
+	i2c2_4_cfg: i2c2-4-cfg {
+		i2c-2-4-pins {
+			pinmux = <K1_PADCONF(84, 4)>,
+				 <K1_PADCONF(85, 4)>;
+			bias-pull-up = <1>;
+		};
+	};
 };
